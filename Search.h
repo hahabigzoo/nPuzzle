@@ -127,6 +127,20 @@ int IDAstar::dfs(State* cur,int bound){
 
 /**
 Astar
+
+Main function
+g(sstart) = 0; all other g-values are infinite; OPEN = {sstart};
+ComputePath();
+publish solution;
+
+ComputePath function
+while(sgoal is not expanded)
+remove s with the smallest [f(s) = g(s)+h(s)] from OPEN;
+insert s into CLOSED;
+for every successor s¡¯ of s such that s¡¯ not in CLOSED
+if g(s¡¯) > g(s) + c(s,s¡¯)
+g(s¡¯) = g(s) + c(s,s¡¯);
+insert s¡¯ into OPEN;
 **/
 
 
@@ -134,7 +148,7 @@ Astar
 class Astar: public SearchBase{
     struct cmp{
         bool operator()(State* a,State* b){
-            return a->f_ > b->f_;
+            return a->f_ == b->f_? a->g_>b->g_ : a->f_ > b->f_;
         }
     };
     struct Compare
@@ -248,13 +262,14 @@ bool Astar::search(){
 
 /******************************************************************************************************************************************/
 /**
-MHAstar
+IMHA* ALGORITHM FROM
+Aine, Sandip, et al. "Multi-heuristic a." The International Journal of Robotics Research 35.1-3 (2016): 224-243.
 **/
 
 class MHAstar{
     struct cmp{
         bool operator()(State* a,State* b){
-            return a->f_ > b->f_;
+            return a->f_ == b->f_? a->g_>b->g_ : a->f_ > b->f_;
         }
     };
     struct Compare
@@ -412,5 +427,122 @@ bool MHAstar::search(){
     return false;
 }
 
+
+/**
+Weighted A* Search: expands states in the order of f =
+g+¦Åh values, ¦Å > 1 = bias towards states that are closer to
+goal
+**/
+class WAstar: public SearchBase{
+    struct cmp{
+        bool operator()(State* a,State* b){
+            return a->f_ == b->f_? a->g_>b->g_ : a->f_ > b->f_;
+        }
+    };
+    struct Compare
+    {
+      bool operator()(const State* x, const State* k) const{
+        int dimension=x->dimension_;
+        for(int i=0;i<dimension*dimension;++i){
+            if(x->values_[i]==k->values_[i])
+                continue;
+            return x->values_[i] < k->values_[i];
+        }
+        return x->values_[dimension*dimension-1] < k->values_[dimension*dimension-1];
+      }
+    };
+    typedef priority_queue<State*, vector<State*>, cmp> QUEUE;
+    typedef map<State*,int,Compare> CloseList;
+public:
+    WAstar(State *start, State *end );
+    ~WAstar();
+    Heuristic* h_function;
+    State *start,*end;
+    int exploration=0;
+    int sigma=2;
+    QUEUE que;
+    CloseList closed;
+
+
+    bool search();
+    void expand(State* cur);
+    bool isgoal(State* cur){
+        if((*cur)==(*end))
+        {
+            (*end)=(*cur);
+            delete cur;
+            cur=NULL;
+            return true;
+        }
+        return false;
+    }
+    int MOVE_X[4] ={0,0,-1,1};
+    int MOVE_Y[4] ={1,-1,0,0};
+    State* successor(State* cur,int i);
+
+};
+
+WAstar::~WAstar(){
+
+}
+
+State* WAstar::successor(State* cur,int i){
+    int x,y;
+    int dimension=cur->dimension_;
+    x=cur->pos_%dimension;
+    y=cur->pos_/dimension;
+    x+=MOVE_X[i];
+    y+=MOVE_Y[i];
+    if(x<0||y<0||x>=dimension||y>=dimension)
+        return 0;
+    State* node=new State(dimension);
+    node->values_=cur->values_;
+    node->dimension_=dimension;
+    node->pos_=y*dimension+x;
+    node->values_[cur->pos_]=cur->values_[node->pos_];
+    node->values_[node->pos_]=0;
+    node->parent_=cur;
+    node->g_=cur->g_+1;
+    return node;
+}
+
+WAstar::WAstar(State *start, State *end):start(start),end(end){}
+
+void WAstar::expand(State* cur){
+    exploration+=1;
+    State* node=NULL;
+    for(int i=0;i<4;i++){
+        node=successor(cur,i);
+        if(node==NULL){
+            continue;
+        }
+        if(closed.count(node) == 0){
+            closed[node]=1;
+            node->f_=node->g_+sigma*h_function->get_h(node,end);
+            que.push(node);
+        }else{
+            delete node;
+            node=NULL;
+        }
+    }
+}
+
+bool WAstar::search(){
+    State* cur=NULL;
+    cur=start;
+    cur->f_=cur->g_+sigma*h_function->get_h(cur,end);
+    que.push(start);
+    closed[cur]=1;
+    while(!que.empty()){
+        cur=que.top();
+        que.pop();
+        if(isgoal(cur)){
+            return true;
+        }
+        expand(cur);
+    }
+    return false;
+
+}
 #endif
 

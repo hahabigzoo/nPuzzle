@@ -24,9 +24,7 @@ class Heuristic;
 double dur;
 clock_t start_t=0,end_t=0;
 State *start,*target;
-Heuristic* heuristic=NULL;
-
-
+Heuristic* heuristics[]={new NULLHeuristic(), new MisplacedTiles(),new Diagonal(),new Manhattan(),new LinearConflict()};//different heuristic function for IDA_star and a_star
 /**
  judge whether the puzzle is solvable.
 **/
@@ -128,24 +126,54 @@ void *func(void* a){
     return 0;
 }
 
+void run(Astar* algorithm){
+        end_t=0;
+        pthread_t tid;
+        start_t= clock();
+        if(isSolvable(start,target)){
+            //cout<<"Case:"<<++cnt<<endl;
+            //limited time for ruunig
+            pthread_create(&tid,NULL,func,algorithm);
+            //set time for n ms
+            Sleep(60000);
+            if(target->g_==0){
+                //out of time
+                pthread_cancel(tid);
+                cout<<"no found"<<endl;
+                if(end_t==0)
+                    end_t = clock();
+                dur = (double)(end_t - start_t);
+                printf("Use Time:%f s\n",(dur/CLOCKS_PER_SEC));
+                cout<<(dur/CLOCKS_PER_SEC)<<",";
+                cout<<"NaN"<<",";
+                cout<<algorithm->exploration<<endl;
+                return;
+            }
+            dur = (double)(end_t - start_t);
+            //printf("Use Time:%f s\n",(dur/CLOCKS_PER_SEC));
+            //cout<<"Path length:"<<target->g_<<endl;
+            //cout<<"node counting:"<<algorithm->exploration<<endl;
+            Print();
+        }
+}
+
+
+
 /**
  main function
 **/
 
 int main(){
-    FILE* f=freopen("./input.txt", "r", stdin);
-    freopen("./save/output_a.csv", "w", stdout);
+    FILE* f=freopen("./input_3.txt", "r", stdin);
+    //freopen("./output_3.csv", "w", stdout);
     if(f==NULL){
         cout<<"failed"<<endl;
         return 0;
     }
     int dimension;
     int cnt=0;
-    cout<<"ID,Time,Path Len,Node Num"<<endl;
+    //cout<<"ID,Time,Path Len,Max Node,Node Num"<<endl;
     while(cin>>dimension){
-        if(cnt==10){
-            break;
-        }
         start=new State(dimension);
         target=new State(dimension);
         for(int i=0;i<dimension*dimension;++i){
@@ -161,24 +189,20 @@ int main(){
             }
         }
         /**
-        different heuristic function for IDA_star and a_star
-        **/
-        //heuristic=new Manhattan();
-        heuristic=new LinearConflict();
-        //heuristic=new MisplacedTiles();
-        /**
         A_star algorithm
         **/
-        //wait for achieving
         Astar* algorithm;
         algorithm=new Astar(start,target);
-        algorithm->h_function=heuristic;
         /**
         IDA_star algorithm
         **/
         //IDAstar* algorithm;
         //algorithm=new IDAstar(start,target);
-        //algorithm->h_function=heuristic;
+        /**
+        different heuristic function for IDA_star and a_star
+        heuristics={ NULL, MisplacedTiles, Diagonal, Manhattan, LinearConflict}
+        **/
+        algorithm->h_function=heuristics[4];
         /**
         MHA algorithm
         **/
@@ -187,129 +211,36 @@ int main(){
         /**
         time
         **/
-        pthread_t tid;
+        end_t=0;
         start_t= clock();
         if(isSolvable(start,target)){
-            cout<<++cnt<<",";
+            //cout<<++cnt<<",";
             //cout<<"Case:"<<++cnt<<endl;
             //unlimited time for ruunig
-            //algorithm->search();
-            //limited time for ruunig
-            pthread_create(&tid,NULL,func,algorithm);
-            //set time for n ms
-            Sleep(2000);
-            if(target->g_==0){
-                pthread_cancel(tid);
-                //cout<<"no found"<<endl;
-                //out of time
-                //pthread_kill(tid, 0);
-                if(end_t==0)
-                    end_t = clock();
-                dur = (double)(end_t - start_t);
-                //printf("Use Time:%f s\n",(dur/CLOCKS_PER_SEC));
-                cout<<(dur/CLOCKS_PER_SEC)<<",";
-                cout<<"NaN"<<",";
-                cout<<algorithm->exploration<<endl;
-                continue;
-            }
-            //end_t = clock();
+            algorithm->search();
+            end_t = clock();
             dur = (double)(end_t - start_t);
             //printf("Use Time:%f s\n",(dur/CLOCKS_PER_SEC));
             //cout<<"Path length:"<<target->g_<<endl;
             //cout<<"node counting:"<<algorithm->exploration<<endl;
-            //Print();
+            Print();
             /***excal***/
+
+            /**
             cout<<(dur/CLOCKS_PER_SEC)<<",";
             cout<<target->g_<<",";
+            cout<<algorithm->que.size()<<",";
             cout<<algorithm->exploration<<endl;
+            **/
             delete target;
             delete start;
-            delete heuristic;
             delete algorithm;
         }else{
-            //cout<<"no solution"<<endl;
+            cout<<"no solution"<<endl;
             delete target;
             delete start;
-            delete heuristic;
             delete algorithm;
         }
     }
     return 0;
 }
-
-/**
-&&algorithm->search()
-Test
-3
-1 2 3
-4 5 6
-7 8 0
-1 2 3
-4 5 6
-7 8 0
-
-3
-1 2 3
-4 5 0
-7 8 6
-1 2 3
-4 5 6
-7 8 0
-
-4
-1 2 3 4
-5 10 6 7
-14 0 11 8
-9 13 15 12
-
-1 2 3 4
-5 6 7 8
-9 10 11 12
-13 14 15 0
-
-4
-1 2 3 4
-6 7 8 0
-5 10 11 12
-9 13 14 15
-
-1 2 3 4
-5 6 7 8
-9 10 11 12
-13 14 15 0
-
-4
-8 13 0 6
-1 15 9 14
-3 4 5 11
-7 2 10 12
-
-1 2 3 4
-5 6 7 8
-9 10 11 12
-13 14 15 0
-
-IDA* + Manha:2005400
-
-4
-4 7 0 9
-12 10 11 8
-14 6 15 1
-2 5 3 13
-
-1 2 3 4
-5 6 7 8
-9 10 11 12
-13 14 15 0
-
-4
-4 7 0 9
-12 10 11 8
-14 6 15 1
-2 5 3 13
-
-1 2 3 4
-5 6 7 8
-9 10 11 12
-13 14 15 0
-**/
